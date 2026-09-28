@@ -493,7 +493,9 @@ class ZipBlockAccessorTest {
                 localDefaultConfig.powersOfTenPerZipFileContents(),
                 localDefaultConfig.blockRetentionThreshold(),
                 localDefaultConfig.maxFilesPerDir(),
-                localDefaultConfig.stagedBlockNotificationsEnabled());
+                localDefaultConfig.stagedBlockNotificationsEnabled(),
+                localDefaultConfig.cachedZipAccessorEnabled(),
+                localDefaultConfig.maxCachedZipArchives());
     }
 
     private FilesHistoricConfig getDefaultConfiguration() {

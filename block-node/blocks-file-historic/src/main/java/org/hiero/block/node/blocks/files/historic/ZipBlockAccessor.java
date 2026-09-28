@@ -12,6 +12,7 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.System.Logger;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -63,18 +64,27 @@ final class ZipBlockAccessor implements BlockAccessor {
         zipFileLink = createTempLink(linkBase);
     }
 
+    /**
+     * Creates a hard link at a name derived from {@code linkBase}, retrying with the next candidate name on a
+     * collision instead of checking existence first: a separate exists-check followed by a create is not atomic,
+     * so two accessors racing to link the same block concurrently could otherwise both pick the same free-looking
+     * name and have one lose with {@link FileAlreadyExistsException}. Letting {@link Files#createLink} itself be
+     * the single source of truth for "is this name taken" removes that race.
+     */
     @NonNull
     private Path createTempLink(final Path linkBase) throws IOException {
         int count = 0;
         Path candidateLink = linkBase;
-        while (Files.exists(candidateLink) && count < Integer.MAX_VALUE) {
-            candidateLink = getTempFilePath(linkBase, count++);
-        }
-        if (Files.exists(candidateLink)) {
-            final String message = "Unable to create link; more than %d links already created for %s";
-            throw new IOException(message.formatted(count, linkBase));
-        } else {
-            return Files.createLink(candidateLink, absoluteZipFilePath);
+        while (true) {
+            try {
+                return Files.createLink(candidateLink, absoluteZipFilePath);
+            } catch (final FileAlreadyExistsException e) {
+                if (count >= Integer.MAX_VALUE - 1) {
+                    final String message = "Unable to create link; more than %d links already created for %s";
+                    throw new IOException(message.formatted(count, linkBase), e);
+                }
+                candidateLink = getTempFilePath(linkBase, count++);
+            }
         }
     }
 
